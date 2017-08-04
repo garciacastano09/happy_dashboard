@@ -1,0 +1,255 @@
+<link rel="import" href="bower_components/polymer/polymer.html">
+<link rel="import" href="date-slider.html">
+<link rel="import" href="tweet-list-element.html">
+<link rel="import" href="happymap-element.html">
+<!-- jQuery -->
+<script src="bower_components/jquery/dist/jquery.min.js"></script>
+<!-- Bootstrap -->
+<link href="bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="bower_components/bootstrap/js/dropdown.js"></script>
+<script src="bower_components/bootstrap/js/modal.js"></script>
+<!-- ElasticSearch -->
+<script src="bower_components/elasticsearch/elasticsearch.js"></script>
+<script src="bower_components/jquery-ui/jquery-ui.min.js"></script>
+<!-- jQDateRangeSlider -->
+<script src="dist/jQDateRangeSlider-min.js"></script>
+
+<dom-module id="happymap-dashboard">
+  <style is="custom-style">
+    #happymap {
+      height: 600px;
+    }
+    #tweetContainer{
+      max-height: 600px;
+      overflow-y:scroll;
+    }
+  </style>
+  <template>
+    <!-- Dashboard testing:
+    Min: [[timestampToDate(mindate)]] <p>
+    Max: [[timestampToDate(maxdate)]]<p>
+    Def sel min: [[timestampToDate(defaultselectedmindate)]]<p>
+    Def sel max: [[timestampToDate(defaultselectedmaxdate)]]<p>
+    Sel min: [[timestampToDate(selectedmindate)]]<p>
+    Sel max: [[timestampToDate(selectedmaxdate)]] -->
+    <!--BOARD-->
+    <div id="board">
+      <!--MAP-->
+      <div id='filters'>
+        <date-slider min="{{mindate}}" max="{{maxdate}}" defaultselectedmin="{{defaultselectedmindate}}"
+        defaultselectedmax="{{defaultselectedmaxdate}}" selectedmin="{{selectedmindate}}"
+        selectedmax="{{selectedmaxdate}}"></date-slider>
+      </div>
+      <div id="map_and_tweets_box"
+        <p>
+        <div id="happymap" class="col-md-8">
+            <happymap-element data="{{data}}" selected="{{selected}}"></happymap-element>
+        </div>
+        <!--TWEET CONTAINER-->
+        <p>
+        <div id="tweetContainer" class="col-md-4">
+            <tweet-list-element data="{{data}}" selected="{{selected}}"></tweet-list-element>
+        </div>
+    </div>
+  </template>
+  <script>
+    Polymer({
+      is: 'happymap-dashboard',
+      properties: {
+        data: {
+          type: Array,
+          notify: true,
+          value: []
+        },
+        selected:{
+          type: Array,
+          notify: true,
+          value:[],
+        },
+        mindate: {
+          type: Number,
+          notify: true,
+          value: 1264978800000,
+        },
+        maxdate: {
+          type: Number,
+          notify: true,
+          value: 1485903600000,
+        },
+        defaultselectedmindate: {
+          type: Number,
+          notify: true,
+          value: 1328050800000,
+        },
+        defaultselectedmaxdate: {
+          type: Number,
+          notify: true,
+          value: 1422745200000,
+        },
+        selectedmindate: {
+          type: Number,
+          notify: true,
+          value: 0,
+          observer: '_filterChanged'
+        },
+        selectedmaxdate: {
+          type: Number,
+          notify: true,
+          value: 0,
+          observer: '_filterChanged'
+        },
+        isReady: {
+          type: Boolean,
+          value: false
+        }
+      },
+    ready: function() {
+      console.log('LOG happymap-dashboard: dashboard ready()');
+      var that = this;
+      // QUERY STANDARD: get all tweets from ES
+      var client = new elasticsearch.Client({
+          host: 'localhost:9200'
+      });
+      client.search({
+        index: 'tweets_happymap',
+        size: 100,
+        body: {
+          query: {
+              match_all: {}
+          },
+          aggs: {
+            minTimestamp: {
+              min: {
+                field: "timestamp_ms"
+              }
+            },
+            maxTimestamp: {
+              max: {
+                field: "timestamp_ms"
+              }
+            }
+          }
+        }
+      }).then(function (resp) {
+        that.maxdate = resp.aggregations.maxTimestamp.value;
+        that.mindate = resp.aggregations.minTimestamp.value;
+        that.isReady = true;
+        that.prepareData(resp.hits.hits);
+      });
+    },
+    getFilteredTweets: function() {
+      var that = this;
+      if (!that.isReady) {
+        return;
+      }
+      console.log('LOG happymap-dashboard: getFilteredTweets');
+      // QUERY FILTERED: get tweets matching certain filter
+      var client = new elasticsearch.Client({
+          host: 'localhost:9200'
+      });
+      client.search({
+          index: 'tweets_happymap',
+          size: 100,
+          body: {
+            query: {
+                range : {
+                    timestamp_ms : {
+                        gte: that.selectedmindate,
+                        lte: that.selectedmaxdate,
+                    }
+                }
+            }
+      }
+      }).then(function (resp) {
+        that.splice("data", 0, that.data.length);
+        that.prepareData(resp.hits.hits);
+      });
+    },
+    prepareData: function(rawData){
+      var that = this;
+      if (!that.isReady) {
+        return;
+      }
+      console.log('LOG happymap-dashboard: prepareData');
+      // Index in ES only interesting data
+      var minTimestamp = Number.MAX_SAFE_INTEGER;
+      var maxTimestamp = 0;
+      var cookedData = [];
+      for (var i = rawData.length - 1; i >= 0; i--) {
+        if (!rawData[i]._source.coordinates) {
+          continue;
+        }
+        if (rawData[i]._source.timestamp_ms < minTimestamp) {
+          minTimestamp = rawData[i]._source.timestamp_ms;
+        }
+        if (rawData[i]._source.timestamp_ms > maxTimestamp) {
+          maxTimestamp = rawData[i]._source.timestamp_ms;
+        }
+        var lat = rawData[i]._source.coordinates.coordinates[1];
+        var lon = rawData[i]._source.coordinates.coordinates[0];
+        var text = rawData[i]._source.text;
+        var username = rawData[i]._source.user.screen_name;
+        var id = rawData[i]._source.id;
+        var avatarUrl = rawData[i]._source.user.profile_image_url;
+        var timestamp = rawData[i]._source.timestamp_ms;
+        var userUrl = rawData[i]._source.user.url;
+        var valence = rawData[i]._source.sentiment_analysis['valence'];
+        var arousal = rawData[i]._source.sentiment_analysis['arousal'];
+        var dominance = rawData[i]._source.sentiment_analysis['dominance'];
+        var emotion = rawData[i]._source.sentiment_analysis['emotion'];
+        if (lat && lon && valence && arousal && dominance && emotion && text){
+          cookedData.push({
+              id: id,
+              username: username,
+              lat:lat,
+              lon:lon,
+              valence:valence,
+              arousal:arousal,
+              dominance:dominance,
+              emotion:emotion,
+              text:text,
+              timestamp: timestamp,
+              avatarUrl: avatarUrl}
+          )
+        }
+      }
+      that.data = cookedData;
+      this.notifySplices('data', [
+        { index: 1, removed: [], addedCount: cookedData.length, object: that.data, type: 'splice'}
+      ]);
+      if(minTimestamp < Number.MAX_SAFE_INTEGER && maxTimestamp > 0 && that.selectedmindate == 0 && that.selectedmaxdate == 0){
+        that.defaultselectedmindate = minTimestamp;
+        that.defaultselectedmaxdate = maxTimestamp;
+        // console.log('Minimos seleccionados cambiados a: ' + that.mindate)
+        // console.log('Maximos seleccionados cambiados a: ' + that.maxdate)
+      }
+    },
+    _filterChanged: function(newValue, oldValue) {
+      var that = this;
+      if (!that.isReady) {
+        return;
+      }
+      console.log('LOG happymap-dashboard: filterChanged');
+      if (oldValue == undefined){
+        return;
+      }
+      // console.log('Some date changed from ' + oldValue+ ' to: ' + newValue + '!');
+      that.getFilteredTweets();
+    },
+    dateToTimestamp: function(date) {
+      var that = this;
+      if (!that.isReady) {
+        return;
+      }
+      return date.getTime().toString();
+    },
+    timestampToDate: function(timestamp) {
+      var that = this;
+      if (!that.isReady) {
+        return;
+      }
+      return new Date(parseInt(timestamp));
+    }
+});
+    </script>
+</dom-module>

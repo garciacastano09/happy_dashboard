@@ -1,0 +1,5 @@
+bower_components
+elasticsearch/nodes
+luigi/preprocessed-madrid40000.json
+luigi/senpy-madrid40000.json
+luigi/madrid40000.json

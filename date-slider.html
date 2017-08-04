@@ -1,0 +1,128 @@
+<link rel="import" href="bower_components/polymer/polymer.html">
+<link href="bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" media="screen">
+<link href="styles/iThing.css" rel="stylesheet" media="screen">
+<script src="bower_components/jquery/dist/jquery.min.js"></script>
+<script src="bower_components/jquery-ui/jquery-ui.min.js"></script>
+<script src="dist/jQDateRangeSlider-min.js"></script>
+
+<dom-module id="date-slider">
+  <template>
+    <!-- [[test]] -->
+    <!-- dateSlider testing:
+    Min:[[timestampToDate(min)]] <p>
+    Max[[timestampToDate(max)]] <p>
+    DefaultSelectedMin[[timestampToDate(defaultselectedmin)]] <p>
+    DefaultSelectedMax[[timestampToDate(defaultselectedmax)]] <p>
+    SelectedMin[[timestampToDate(selectedmin)]] <p>
+    SelectedMax[[timestampToDate(selectedmax)]] -->
+    <div class="container">
+      <div class="hero-unit">
+        <div class="sliderContainer"><div id="dateSlider"></div></div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    Polymer({
+      is: 'date-slider',
+      properties: {
+        min: {
+          type: Number,
+          notify: true,
+          observer: '_boundsChanged'
+        },
+        max: {
+          type: Number,
+          notify: true,
+          observer: '_boundsChanged'
+        },
+        defaultselectedmin: {
+          type: Number,
+          notify: true,
+          observer: '_defaultSelectedChanged'
+        },
+        defaultselectedmax: {
+          type: Number,
+          notify: true,
+          observer: '_defaultSelectedChanged'
+        },
+        selectedmin: {
+          type: Number,
+          notify: true
+        },
+        selectedmax: {
+          type: Number,
+          notify: true
+        },
+        isReady: {
+          type: Boolean,
+          value: false
+        }
+      },
+      ready: function(){
+        console.log('LOG date-slider: ready()');
+        var that = this;
+        var minDate = that.timestampToDate(that.min);
+        var maxDate = that.timestampToDate(that.max);
+        var selectedMinDate = that.timestampToDate(that.defaultselectedmin);
+        var selectedMaxDate = that.timestampToDate(that.defaultselectedmax);
+        $(document).ready(function(){
+          $("#dateSlider").dateRangeSlider({
+            bounds: {min: minDate, max: maxDate},
+            defaultValues: {min: selectedMinDate, max: selectedMaxDate},
+            scales: [{
+              next: function(val){
+                var next = new Date(val);
+                return new Date(next.setMonth(next.getMonth()));
+              },
+            }]
+          });
+          $("#dateSlider").bind("userValuesChanged", function(e, data){
+            that.selectedmin = that.dateToTimestamp(data.values.min);
+            that.selectedmax = that.dateToTimestamp(data.values.max);
+          });
+        });
+        that.isReady = true;
+      },
+      dateToTimestamp: function(date) {
+        var that = this;
+        if (!that.isReady) {
+          return;
+        }
+        return date.getTime().toString();
+      },
+      timestampToDate: function(timestamp) {
+        var that = this;
+        if (!that.isReady) {
+          return;
+        }
+        return new Date(parseInt(timestamp));
+      },
+      _defaultSelectedChanged: function() {
+        var that = this;
+        if (!that.isReady) {
+          return;
+        }
+        console.log('LOG date-slider: defaultChanged');
+        // console.log('Recibido!' + that.defaultselectedmin);
+        // console.log('Recibido!' + that.defaultselectedmax);
+        $("#dateSlider").dateRangeSlider("max", that.timestampToDate(that.defaultselectedmax));
+        $("#dateSlider").dateRangeSlider("min", that.timestampToDate(that.defaultselectedmin));
+      },
+      _boundsChanged: function() {
+        var that = this;
+        if (!that.isReady) {
+          return;
+        }
+        console.log('LOG date-slider: boundsChanged. Min: ' + that.min + ' Max: ' + that.max);
+        $("#dateSlider").dateRangeSlider(
+          "option",
+          "bounds",
+          {
+            min: that.timestampToDate(that.min),
+            max: that.timestampToDate(that.max)
+        });
+      }
+    });
+  </script>
+</dom-module>

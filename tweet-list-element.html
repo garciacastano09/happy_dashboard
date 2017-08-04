@@ -1,0 +1,93 @@
+<link rel="import" href="bower_components/polymer/polymer.html">
+<!-- jQuery -->
+<script src="bower_components/jquery/dist/jquery.min.js"></script>
+<!-- Bootstrap -->
+<link href="bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<dom-module id="tweet-list-element">
+  <template>
+      <!--TWEET CONTAINER-->
+      <!-- Selected:
+      {{selected.length}}
+      <template id="tweetList" is="dom-repeat" items="{{selected}}" as="tweet" initialCount="25">
+          {{tweet.text}}
+      </template> -->
+      <array-selector id="tweetSelector" items="{{data}}" selected="{{selected}}" multi></array-selector>
+      <template id="tweetList" is="dom-repeat" items="{{data}}" as="tweet" initialCount="25">
+          <div id="tweetItem" class="list-group">
+              <a href="#" class="list-group-item flex-column" on-click="toggleSelection">
+                  <p class="mb-1">{{tweet.text}}.</p>
+                  <small><strong> - @{{tweet.username}}</strong> {{timestampToDate(tweet.timestamp)}}</small>
+              </a>
+          </div>
+      </template>
+      <template is="dom-if" if="{{_isArrayEmpty(data)}}">
+        There are not tweets matching the filter.
+      </template>
+      </div>
+    </div>
+    </div>
+  </template>
+  <script>
+    Polymer({
+      is: 'tweet-list-element',
+      properties: {
+        data: {
+          type: Array,
+          value: [],
+          notify: true
+        },
+        selected: {
+          type: Array,
+          value: [],
+          notify: true,
+        },
+        isReady: {
+          type: Boolean,
+          value: false
+        }
+      },
+      ready: function() {
+        console.log('LOG tweet-list-element: ready()');
+        this.isReady = true;
+      },
+      toggleSelection: function(e) {
+        var that = this;
+        if (!that.isReady) {
+          return;
+        }
+        console.log('LOG tweet-list-element: toggleSelection');
+        var item = that.$.tweetList.itemForElement(e.target);
+        var index = $.inArray(item, that.selected);
+        if(index == -1){
+          that.$.tweetSelector.select(item);
+        }
+        else{
+          var x = $.grep(that.selected, function(value) {
+            return value != item;
+          });
+          that.selected = x;
+        }
+      },
+      _isArrayEmpty: function(object){
+        var that = this;
+        if (!that.isReady) {
+          return;
+        }
+        console.log('LOG tweet-list-element: isArrayEmpty');
+        if(!object){
+          return false;
+        }
+        return object.length == 0;
+      },
+      timestampToDate: function(timestamp) {
+        var that = this;
+        if (!that.isReady) {
+          return;
+        }
+        return new Date(parseInt(timestamp));
+      }
+  });
+  </script>
+
+</dom-module>
